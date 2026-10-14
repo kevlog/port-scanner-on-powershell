@@ -183,6 +183,10 @@ function Test-TcpPort {
 
         $stopwatch.Stop()
 
+        # -------------------------
+        # OPEN
+        # -------------------------
+
         if ($connected -and $tcpClient.Connected) {
 
             return [PSCustomObject]@{
@@ -193,9 +197,42 @@ function Test-TcpPort {
             }
         }
 
+        # -------------------------
+        # TIMEOUT
+        # -------------------------
+
+        if (-not $connected) {
+
+            return [PSCustomObject]@{
+                Port    = $Port
+                State   = "TIMEOUT"
+                Service = Get-ServiceName $Port
+                Latency = $stopwatch.ElapsedMilliseconds
+            }
+        }
+
+        # -------------------------
+        # CLOSED
+        # -------------------------
+
+        return [PSCustomObject]@{
+            Port    = $Port
+            State   = "CLOSED"
+            Service = Get-ServiceName $Port
+            Latency = $stopwatch.ElapsedMilliseconds
+        }
+
     }
     catch {
-        # Ignore connection errors.
+
+        # Connection was actively refused / failed.
+        return [PSCustomObject]@{
+            Port    = $Port
+            State   = "CLOSED"
+            Service = Get-ServiceName $Port
+            Latency = 0
+        }
+
     }
     finally {
 
@@ -203,8 +240,6 @@ function Test-TcpPort {
             $tcpClient.Close()
         }
     }
-
-    return $null
 }
 
 # ============================================================
@@ -449,6 +484,7 @@ Write-Host ""
 # SCAN
 # ============================================================
 
+$results = @()
 $openPorts = @()
 
 $scanStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
@@ -488,22 +524,54 @@ foreach ($portInfo in $portsToScan) {
         -Port $port `
         -TimeoutMs $TimeoutMs
 
-    if ($null -ne $result) {
+    $results += $result
+
+    # -------------------------
+    # Save OPEN ports
+    # -------------------------
+
+    if ($result.State -eq "OPEN") {
 
         $openPorts += $result
 
         Write-Host (
-            "[OPEN] {0,-6} {1,-16} {2} ms" -f `
+            "[OPEN]   {0,-6} {1,-20} {2} ms" -f `
             $result.Port,
             $result.Service,
             $result.Latency
         ) -ForegroundColor Green
+    }
+
+    # -------------------------
+    # Show CLOSED / TIMEOUT
+    # -------------------------
+
+    elseif ($ScanType -ne "Full") {
+
+        if ($result.State -eq "CLOSED") {
+
+            Write-Host (
+                "[CLOSED] {0,-6} {1,-20}" -f `
+                $result.Port,
+                $result.Service
+            ) -ForegroundColor DarkGray
+
+        }
+        elseif ($result.State -eq "TIMEOUT") {
+
+            Write-Host (
+                "[TIMEOUT] {0,-5} {1,-20}" -f `
+                $result.Port,
+                $result.Service
+            ) -ForegroundColor Yellow
+        }
     }
 }
 
 $scanStopwatch.Stop()
 
 if ($ScanType -eq "Full") {
+
     Write-Progress `
         -Activity "Scanning $Target" `
         -Completed
@@ -513,15 +581,23 @@ if ($ScanType -eq "Full") {
 # RESULT
 # ============================================================
 
+$closedPorts = @(
+    $results | Where-Object { $_.State -eq "CLOSED" }
+)
+
+$timeoutPorts = @(
+    $results | Where-Object { $_.State -eq "TIMEOUT" }
+)
+
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host " SCAN RESULT" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host ""
 
-if ($openPorts.Count -eq 0) {
+if ($results.Count -eq 0) {
 
-    Write-Host "No open TCP ports found." -ForegroundColor Yellow
+    Write-Host "No scan result." -ForegroundColor Yellow
 
 }
 else {
@@ -536,15 +612,36 @@ else {
 
     Write-Host "------------------------------------------------------------"
 
-    foreach ($result in $openPorts) {
+    foreach ($result in $results) {
 
-        Write-Host (
-            "{0,-8} {1,-10} {2,-20} {3} ms" -f `
-            $result.Port,
-            $result.State,
-            $result.Service,
-            $result.Latency
-        ) -ForegroundColor Green
+        if ($result.State -eq "OPEN") {
+
+            Write-Host (
+                "{0,-8} {1,-10} {2,-20} {3} ms" -f `
+                $result.Port,
+                $result.State,
+                $result.Service,
+                $result.Latency
+            ) -ForegroundColor Green
+        }
+        elseif ($result.State -eq "CLOSED") {
+
+            Write-Host (
+                "{0,-8} {1,-10} {2,-20}" -f `
+                $result.Port,
+                $result.State,
+                $result.Service
+            ) -ForegroundColor DarkGray
+        }
+        else {
+
+            Write-Host (
+                "{0,-8} {1,-10} {2,-20}" -f `
+                $result.Port,
+                $result.State,
+                $result.Service
+            ) -ForegroundColor Yellow
+        }
     }
 }
 
@@ -554,6 +651,8 @@ Write-Host "Target          : $Target"
 Write-Host "Scan Type       : $ScanType"
 Write-Host "Ports Scanned   : $totalPorts"
 Write-Host "Open Ports      : $($openPorts.Count)"
+Write-Host "Closed Ports    : $($closedPorts.Count)"
+Write-Host "Timeout Ports   : $($timeoutPorts.Count)"
 Write-Host "Scan Duration   : $([math]::Round($scanStopwatch.Elapsed.TotalSeconds, 2)) seconds"
 Write-Host "------------------------------------------------------------"
 Write-Host ""
