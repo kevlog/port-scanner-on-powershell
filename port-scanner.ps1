@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [string]$Target,
 
     [ValidateSet("Common", "Important", "Full", "Ports")]
@@ -11,179 +11,160 @@ param(
 )
 
 # ============================================================
-# NMAP-LIKE TCP PORT SCANNER
-# Native PowerShell / .NET - No external tools required
+# PORT DEFINITIONS
 # ============================================================
 
-# ------------------------------------------------------------
-# Common ports
-# ------------------------------------------------------------
-
-$commonPorts = @{
-    21    = "ftp"
-    22    = "ssh"
-    23    = "telnet"
-    25    = "smtp"
-    53    = "dns"
-    80    = "http"
-    110   = "pop3"
-    111   = "rpcbind"
-    135   = "msrpc"
-    139   = "netbios-ssn"
-    143   = "imap"
-    443   = "https"
-    445   = "microsoft-ds"
-    465   = "smtps"
-    587   = "submission"
-    636   = "ldaps"
-    993   = "imaps"
-    995   = "pop3s"
-    1433  = "ms-sql-s"
-    1521  = "oracle"
-    2049  = "nfs"
-    2375  = "docker"
-    2376  = "docker-ssl"
-    3000  = "http-alt"
-    3306  = "mysql"
-    3389  = "ms-wbt-server"
-    5432  = "postgresql"
-    5672  = "amqp"
-    5900  = "vnc"
-    6379  = "redis"
-    6443  = "kubernetes"
-    8080  = "http-proxy"
-    8443  = "https-alt"
-    9000  = "php-fpm"
-    9090  = "http-alt"
-    9200  = "elasticsearch"
-    27017 = "mongodb"
-}
-
-# ------------------------------------------------------------
-# Important ports
-#
-# Fokus pada port yang umum digunakan untuk:
-# - SSH / Remote Access
-# - Web / Application
-# - Database
-# - File Transfer
-# - Windows services
-# ------------------------------------------------------------
-
-$importantPorts = @{
-    21    = "ftp"
-    22    = "ssh"
-    23    = "telnet"
-    80    = "http"
-    443   = "https"
-    445   = "microsoft-ds"
-    1433  = "ms-sql-s"
-    1521  = "oracle"
-    3306  = "mysql"
-    3389  = "ms-wbt-server"
-    5432  = "postgresql"
-    8080  = "http-proxy"
-    8443  = "https-alt"
-    9000  = "php-fpm"
-    9090  = "http-alt"
-    27017 = "mongodb"
-}
-
-# ------------------------------------------------------------
-# Determine ports to scan
-# ------------------------------------------------------------
-
-switch ($ScanType) {
-
-    "Common" {
-        $portsToScan = $commonPorts.Keys | Sort-Object
-    }
-
-    "Important" {
-        $portsToScan = $importantPorts.Keys | Sort-Object
-    }
-
-    "Full" {
-        $portsToScan = 1..65535
-    }
-
-    "Ports" {
-
-        if (-not $Ports -or $Ports.Count -eq 0) {
-
-            Write-Host ""
-            Write-Host "ERROR: ScanType 'Ports' requires -Ports." `
-                -ForegroundColor Red
-
-            Write-Host ""
-            Write-Host "Example:"
-            Write-Host ".\port-scanner.ps1 -Target 10.10.10.100 -ScanType Ports -Ports 22,1521,1433"
-            Write-Host ""
-
-            exit 1
-        }
-
-        $portsToScan = $Ports | Sort-Object -Unique
-    }
-}
-
-# ------------------------------------------------------------
-# Header
-# ------------------------------------------------------------
-
-Write-Host ""
-Write-Host "============================================================"
-Write-Host "              NMAP-LIKE TCP PORT SCANNER"
-Write-Host "============================================================"
-Write-Host "Target       : $Target"
-Write-Host "Scan Type    : $ScanType"
-Write-Host "Timeout      : $TimeoutMs ms"
-Write-Host "Port Count   : $($portsToScan.Count)"
-Write-Host "Started      : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-Write-Host "============================================================"
-Write-Host ""
-
-# ------------------------------------------------------------
-# Resolve hostname
-# ------------------------------------------------------------
-
-try {
-
-    $resolved = [System.Net.Dns]::GetHostAddresses($Target)
-
-    Write-Host "Resolved IP  : $($resolved -join ', ')" `
-        -ForegroundColor Cyan
-}
-catch {
-
-    Write-Host "WARNING: Could not resolve target." `
-        -ForegroundColor Yellow
-}
-
-Write-Host ""
-
-# ------------------------------------------------------------
-# Table Header
-# ------------------------------------------------------------
-
-Write-Host (
-    "{0,-10} {1,-10} {2,-20} {3,-10}" -f
-    "PORT",
-    "STATE",
-    "SERVICE",
-    "LATENCY"
+$commonPorts = @(
+    @{ Port = 21;    Service = "ftp" },
+    @{ Port = 22;    Service = "ssh" },
+    @{ Port = 23;    Service = "telnet" },
+    @{ Port = 25;    Service = "smtp" },
+    @{ Port = 53;    Service = "dns" },
+    @{ Port = 80;    Service = "http" },
+    @{ Port = 110;   Service = "pop3" },
+    @{ Port = 111;   Service = "rpcbind" },
+    @{ Port = 135;   Service = "msrpc" },
+    @{ Port = 139;   Service = "netbios-ssn" },
+    @{ Port = 143;   Service = "imap" },
+    @{ Port = 443;   Service = "https" },
+    @{ Port = 445;   Service = "microsoft-ds" },
+    @{ Port = 465;   Service = "smtps" },
+    @{ Port = 587;   Service = "submission" },
+    @{ Port = 636;   Service = "ldaps" },
+    @{ Port = 993;   Service = "imaps" },
+    @{ Port = 995;   Service = "pop3s" },
+    @{ Port = 1433;  Service = "ms-sql-s" },
+    @{ Port = 1521;  Service = "oracle" },
+    @{ Port = 2049;  Service = "nfs" },
+    @{ Port = 2375;  Service = "docker" },
+    @{ Port = 2376;  Service = "docker-ssl" },
+    @{ Port = 3000;  Service = "http-alt" },
+    @{ Port = 3306;  Service = "mysql" },
+    @{ Port = 3389;  Service = "ms-wbt-server" },
+    @{ Port = 5432;  Service = "postgresql" },
+    @{ Port = 5672;  Service = "amqp" },
+    @{ Port = 5900;  Service = "vnc" },
+    @{ Port = 6379;  Service = "redis" },
+    @{ Port = 6443;  Service = "kubernetes" },
+    @{ Port = 8080;  Service = "http-proxy" },
+    @{ Port = 8443;  Service = "https-alt" },
+    @{ Port = 9000;  Service = "php-fpm" },
+    @{ Port = 9090;  Service = "http-alt" },
+    @{ Port = 9200;  Service = "elasticsearch" },
+    @{ Port = 27017; Service = "mongodb" }
 )
 
-Write-Host ("-" * 55)
+$importantPorts = @(
+    @{ Port = 21;    Service = "ftp" },
+    @{ Port = 22;    Service = "ssh" },
+    @{ Port = 23;    Service = "telnet" },
+    @{ Port = 80;    Service = "http" },
+    @{ Port = 443;   Service = "https" },
+    @{ Port = 445;   Service = "microsoft-ds" },
+    @{ Port = 1433;  Service = "ms-sql-s" },
+    @{ Port = 1521;  Service = "oracle" },
+    @{ Port = 3306;  Service = "mysql" },
+    @{ Port = 3389;  Service = "ms-wbt-server" },
+    @{ Port = 5432;  Service = "postgresql" },
+    @{ Port = 8080;  Service = "http-proxy" },
+    @{ Port = 8443;  Service = "https-alt" },
+    @{ Port = 9000;  Service = "php-fpm" },
+    @{ Port = 9090;  Service = "http-alt" },
+    @{ Port = 27017; Service = "mongodb" }
+)
 
-# ------------------------------------------------------------
-# Scan
-# ------------------------------------------------------------
+# ============================================================
+# BANNER
+# ============================================================
 
-$openPorts = @()
-$startTime = Get-Date
+function Show-Banner {
 
-foreach ($port in $portsToScan) {
+    Clear-Host
+
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host "                  POWER PORT SCANNER" -ForegroundColor Cyan
+    Write-Host "                    PowerShell Edition" -ForegroundColor Cyan
+    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host " TCP connectivity scanner - No external software required."
+    Write-Host " Similar concept to Nmap TCP port scanning."
+    Write-Host ""
+    Write-Host " IMPORTANT:" -ForegroundColor Yellow
+    Write-Host " Use this scanner only against systems you are authorized"
+    Write-Host " to test."
+    Write-Host ""
+    Write-Host "------------------------------------------------------------"
+    Write-Host " INTERACTIVE SCAN"
+    Write-Host "------------------------------------------------------------"
+    Write-Host ""
+    Write-Host " [1] Common Ports"
+    Write-Host "     Scan commonly used TCP ports."
+    Write-Host ""
+    Write-Host " [2] Important Ports"
+    Write-Host "     Scan a smaller set of important infrastructure ports."
+    Write-Host ""
+    Write-Host " [3] Full Scan"
+    Write-Host "     Scan TCP ports 1-65535."
+    Write-Host ""
+    Write-Host " [4] Custom Ports"
+    Write-Host "     Enter your own ports, e.g. 22,80,443,1521."
+    Write-Host ""
+    Write-Host " [5] Exit"
+    Write-Host ""
+    Write-Host "------------------------------------------------------------"
+    Write-Host " COMMAND LINE USAGE"
+    Write-Host "------------------------------------------------------------"
+    Write-Host ""
+    Write-Host " Common:"
+    Write-Host " .\port-scanner.ps1 -Target 10.10.10.100"
+    Write-Host ""
+    Write-Host " Important:"
+    Write-Host " .\port-scanner.ps1 -Target 10.10.10.100 -ScanType Important"
+    Write-Host ""
+    Write-Host " Full:"
+    Write-Host " .\port-scanner.ps1 -Target 10.10.10.100 -ScanType Full"
+    Write-Host ""
+    Write-Host " Custom:"
+    Write-Host " .\port-scanner.ps1 -Target 10.10.10.100 -ScanType Ports -Ports 22,1521,8080"
+    Write-Host ""
+    Write-Host " Timeout:"
+    Write-Host " .\port-scanner.ps1 -Target 10.10.10.100 -TimeoutMs 1000"
+    Write-Host ""
+    Write-Host " Default timeout: 500 ms"
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor Cyan
+    Write-Host ""
+}
+
+# ============================================================
+# SERVICE LOOKUP
+# ============================================================
+
+function Get-ServiceName {
+    param(
+        [int]$Port
+    )
+
+    $match = $commonPorts | Where-Object { $_.Port -eq $Port }
+
+    if ($null -ne $match) {
+        return $match.Service
+    }
+
+    return "unknown"
+}
+
+# ============================================================
+# TCP PORT SCAN
+# ============================================================
+
+function Test-TcpPort {
+    param(
+        [string]$Target,
+        [int]$Port,
+        [int]$TimeoutMs
+    )
 
     $tcpClient = New-Object System.Net.Sockets.TcpClient
 
@@ -193,141 +174,394 @@ foreach ($port in $portsToScan) {
 
         $asyncResult = $tcpClient.BeginConnect(
             $Target,
-            [int]$port,
+            $Port,
             $null,
             $null
         )
 
-        $success = $asyncResult.AsyncWaitHandle.WaitOne($TimeoutMs)
+        $connected = $asyncResult.AsyncWaitHandle.WaitOne($TimeoutMs)
 
-        if ($success -and $tcpClient.Connected) {
+        $stopwatch.Stop()
 
-            $stopwatch.Stop()
+        if ($connected -and $tcpClient.Connected) {
 
-            $latency = $stopwatch.ElapsedMilliseconds
-
-            # ------------------------------------------------
-            # Determine service name
-            # ------------------------------------------------
-
-            if ($commonPorts.ContainsKey([int]$port)) {
-
-                $service = $commonPorts[[int]$port]
-            }
-            else {
-
-                $service = "unknown"
-            }
-
-            # ------------------------------------------------
-            # Display OPEN port
-            # ------------------------------------------------
-
-            Write-Host (
-                "{0,-10} {1,-10} {2,-20} {3,-10}" -f
-                "$port/tcp",
-                "OPEN",
-                $service,
-                "$latency ms"
-            ) -ForegroundColor Green
-
-            # ------------------------------------------------
-            # Store result
-            # ------------------------------------------------
-
-            $openPorts += [PSCustomObject]@{
-                Port     = $port
-                Protocol = "tcp"
-                State    = "open"
-                Service  = $service
-                Latency  = "$latency ms"
+            return [PSCustomObject]@{
+                Port    = $Port
+                State   = "OPEN"
+                Service = Get-ServiceName $Port
+                Latency = $stopwatch.ElapsedMilliseconds
             }
         }
+
     }
     catch {
-        # Ignore connection errors
+        # Ignore connection errors.
     }
     finally {
 
-        if ($tcpClient) {
-
+        if ($null -ne $tcpClient) {
             $tcpClient.Close()
-            $tcpClient.Dispose()
         }
     }
 
-    # --------------------------------------------------------
-    # Progress indicator for Full scan
-    # --------------------------------------------------------
+    return $null
+}
+
+# ============================================================
+# DETERMINE PORTS
+# ============================================================
+
+function Get-PortsToScan {
+
+    switch ($ScanType) {
+
+        "Common" {
+            return $commonPorts
+        }
+
+        "Important" {
+            return $importantPorts
+        }
+
+        "Full" {
+            return (1..65535 | ForEach-Object {
+                @{
+                    Port    = $_
+                    Service = Get-ServiceName $_
+                }
+            })
+        }
+
+        "Ports" {
+
+            if ($null -eq $Ports -or $Ports.Count -eq 0) {
+                Write-Host ""
+                Write-Host "[ERROR] -ScanType Ports requires -Ports." -ForegroundColor Red
+                Write-Host ""
+                exit 1
+            }
+
+            foreach ($port in $Ports) {
+
+                if ($port -lt 1 -or $port -gt 65535) {
+                    Write-Host "[ERROR] Invalid port: $port" -ForegroundColor Red
+                    Write-Host "        Valid range: 1-65535"
+                    exit 1
+                }
+            }
+
+            return ($Ports | ForEach-Object {
+                @{
+                    Port    = $_
+                    Service = Get-ServiceName $_
+                }
+            })
+        }
+    }
+}
+
+# ============================================================
+# INTERACTIVE MODE
+# ============================================================
+
+$interactiveMode = [string]::IsNullOrWhiteSpace($Target)
+
+if ($interactiveMode) {
+
+    Show-Banner
+
+    # -------------------------
+    # TARGET
+    # -------------------------
+
+    do {
+
+        $Target = Read-Host "Target IP / Hostname"
+
+        if ([string]::IsNullOrWhiteSpace($Target)) {
+            Write-Host "[ERROR] Target cannot be empty." -ForegroundColor Red
+        }
+
+    } while ([string]::IsNullOrWhiteSpace($Target))
+
+    Write-Host ""
+
+    # -------------------------
+    # SCAN TYPE
+    # -------------------------
+
+    do {
+
+        Write-Host "Select scan type:" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host " [1] Common"
+        Write-Host " [2] Important"
+        Write-Host " [3] Full"
+        Write-Host " [4] Custom"
+        Write-Host " [5] Exit"
+        Write-Host ""
+
+        $choice = Read-Host "Choice"
+
+        switch ($choice) {
+
+            "1" {
+                $ScanType = "Common"
+                $validChoice = $true
+            }
+
+            "2" {
+                $ScanType = "Important"
+                $validChoice = $true
+            }
+
+            "3" {
+                $ScanType = "Full"
+                $validChoice = $true
+            }
+
+            "4" {
+                $ScanType = "Ports"
+                $validChoice = $true
+            }
+
+            "5" {
+                Write-Host ""
+                Write-Host "Exiting..." -ForegroundColor Yellow
+                exit 0
+            }
+
+            default {
+                Write-Host ""
+                Write-Host "[ERROR] Invalid choice." -ForegroundColor Red
+                Write-Host ""
+                $validChoice = $false
+            }
+        }
+
+    } while (-not $validChoice)
+
+    # -------------------------
+    # CUSTOM PORTS
+    # -------------------------
+
+    if ($ScanType -eq "Ports") {
+
+        Write-Host ""
+        Write-Host "Example: 22,80,443,1521,3389" -ForegroundColor DarkGray
+
+        do {
+
+            $portInput = Read-Host "Enter ports"
+
+            try {
+
+                $Ports = $portInput -split "," |
+                    ForEach-Object {
+                        [int]$_.Trim()
+                    }
+
+                $invalidPorts = $Ports | Where-Object {
+                    $_ -lt 1 -or $_ -gt 65535
+                }
+
+                if ($Ports.Count -eq 0 -or $invalidPorts.Count -gt 0) {
+                    throw "Invalid port"
+                }
+
+                $validPorts = $true
+
+            }
+            catch {
+
+                Write-Host ""
+                Write-Host "[ERROR] Invalid port list." -ForegroundColor Red
+                Write-Host "        Valid example: 22,80,443,1521"
+                Write-Host ""
+
+                $validPorts = $false
+            }
+
+        } while (-not $validPorts)
+    }
+}
+
+# ============================================================
+# RESOLVE TARGET
+# ============================================================
+
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host " SCAN CONFIGURATION" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Target      : $Target"
+Write-Host "Scan Type   : $ScanType"
+Write-Host "Timeout     : $TimeoutMs ms"
+
+if ($ScanType -eq "Ports") {
+    Write-Host "Ports       : $($Ports -join ', ')"
+}
+
+Write-Host ""
+
+try {
+
+    $addresses = [System.Net.Dns]::GetHostAddresses($Target)
+
+    if ($addresses.Count -eq 0) {
+        throw "No address found."
+    }
+
+    $resolvedAddress = $addresses[0].IPAddressToString
+
+    Write-Host "Resolved IP : $resolvedAddress" -ForegroundColor Green
+}
+catch {
+
+    Write-Host ""
+    Write-Host "[ERROR] Unable to resolve target: $Target" -ForegroundColor Red
+    Write-Host ""
+    exit 1
+}
+
+# ============================================================
+# PREPARE SCAN
+# ============================================================
+
+$portsToScan = Get-PortsToScan
+
+Write-Host ""
+Write-Host "Ports to scan: $($portsToScan.Count)"
+Write-Host ""
+
+if ($ScanType -eq "Full") {
+
+    Write-Host "[!] Full scan may take some time." -ForegroundColor Yellow
+    Write-Host "[!] Press Ctrl+C to stop." -ForegroundColor Yellow
+    Write-Host ""
+}
+
+Write-Host "Starting scan..." -ForegroundColor Cyan
+Write-Host ""
+
+# ============================================================
+# SCAN
+# ============================================================
+
+$openPorts = @()
+
+$scanStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+$totalPorts = $portsToScan.Count
+$currentPort = 0
+
+foreach ($portInfo in $portsToScan) {
+
+    $currentPort++
+
+    $port = $portInfo.Port
+
+    # -------------------------
+    # Progress for Full Scan
+    # -------------------------
 
     if ($ScanType -eq "Full") {
 
         $percent = [math]::Round(
-            (($port / 65535) * 100),
+            ($currentPort / $totalPorts) * 100,
             1
         )
 
         Write-Progress `
             -Activity "Scanning $Target" `
-            -Status "$port / 65535 ports" `
+            -Status "Port $port ($currentPort / $totalPorts)" `
             -PercentComplete $percent
+    }
+
+    # -------------------------
+    # Test Port
+    # -------------------------
+
+    $result = Test-TcpPort `
+        -Target $Target `
+        -Port $port `
+        -TimeoutMs $TimeoutMs
+
+    if ($null -ne $result) {
+
+        $openPorts += $result
+
+        Write-Host (
+            "[OPEN] {0,-6} {1,-16} {2} ms" -f `
+            $result.Port,
+            $result.Service,
+            $result.Latency
+        ) -ForegroundColor Green
     }
 }
 
-# ------------------------------------------------------------
-# Finish progress
-# ------------------------------------------------------------
+$scanStopwatch.Stop()
 
 if ($ScanType -eq "Full") {
-
     Write-Progress `
-        -Activity "Scanning" `
+        -Activity "Scanning $Target" `
         -Completed
 }
 
-$endTime = Get-Date
-$duration = $endTime - $startTime
-
-# ------------------------------------------------------------
-# Summary
-# ------------------------------------------------------------
+# ============================================================
+# RESULT
+# ============================================================
 
 Write-Host ""
-Write-Host "============================================================"
-Write-Host "SCAN COMPLETED"
-Write-Host "============================================================"
-Write-Host "Target       : $Target"
-Write-Host "Scan Type    : $ScanType"
-Write-Host "Ports Scanned: $($portsToScan.Count)"
-Write-Host "Open Ports   : $($openPorts.Count)"
-Write-Host "Duration     : $($duration.ToString())"
-Write-Host "Finished     : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-Write-Host "============================================================"
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host " SCAN RESULT" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host ""
 
-# ------------------------------------------------------------
-# Open port summary
-# ------------------------------------------------------------
+if ($openPorts.Count -eq 0) {
 
-if ($openPorts.Count -gt 0) {
+    Write-Host "No open TCP ports found." -ForegroundColor Yellow
 
-    Write-Host ""
-    Write-Host "OPEN PORT SUMMARY" `
-        -ForegroundColor Cyan
-
-    Write-Host ""
-
-    $openPorts |
-        Format-Table `
-            Port,
-            Protocol,
-            State,
-            Service,
-            Latency `
-            -AutoSize
 }
 else {
 
+    Write-Host (
+        "{0,-8} {1,-10} {2,-20} {3}" -f `
+        "PORT",
+        "STATE",
+        "SERVICE",
+        "LATENCY"
+    )
+
+    Write-Host "------------------------------------------------------------"
+
+    foreach ($result in $openPorts) {
+
+        Write-Host (
+            "{0,-8} {1,-10} {2,-20} {3} ms" -f `
+            $result.Port,
+            $result.State,
+            $result.Service,
+            $result.Latency
+        ) -ForegroundColor Green
+    }
+}
+
+Write-Host ""
+Write-Host "------------------------------------------------------------"
+Write-Host "Target          : $Target"
+Write-Host "Scan Type       : $ScanType"
+Write-Host "Ports Scanned   : $totalPorts"
+Write-Host "Open Ports      : $($openPorts.Count)"
+Write-Host "Scan Duration   : $([math]::Round($scanStopwatch.Elapsed.TotalSeconds, 2)) seconds"
+Write-Host "------------------------------------------------------------"
+Write-Host ""
+
+if ($interactiveMode) {
+
+    Write-Host "Scan completed." -ForegroundColor Green
     Write-Host ""
-    Write-Host "No open TCP ports detected." `
-        -ForegroundColor Yellow
+
+    Read-Host "Press ENTER to exit"
 }
